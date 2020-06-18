@@ -102,7 +102,7 @@ def runPhysics():
 
             if velocity >= 0 and velocity <= 0.005:
                 print("APOGEE")
-                print("Time: " + str(t))
+                print("Time (first stage): " + str(t))
                 print("Thrust: " + str(thrust))
                 print("Pressure: " + str(pressure))
                 print("Temperature: " + str(temperature))
@@ -119,7 +119,7 @@ def runPhysics():
                 airResistance = 0
                 terminalVelocity = math.sqrt((8*currentMass*g)/(density*cd*noiseArea))
                 status = "landing"
-                print("Terminal velocity:" + str(terminalVelocity) + "\n")
+                print("Terminal velocity: " + str(terminalVelocity) + "\n")
         else:
             if altitude % 200 == 0:
                 temperature += 1
@@ -147,7 +147,8 @@ def runPhysics():
 
             if landingAltitude >= 0 and landingAltitude <= 1:
                 print("LANDED")
-                print("Time: " + str(t))
+                print("Total flight time: " + str(t))
+                print("Second stage time: " + str(t - apogeeTime))
                 print("Thrust: " + str(thrust))
                 print("Pressure: " + str(pressure))
                 print("Temperature: " + str(temperature))
