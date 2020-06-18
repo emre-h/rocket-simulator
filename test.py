@@ -3,12 +3,10 @@ import numpy
 import math
 import sys
 
-status = "normal"
-
 thrustFilePath = sys.argv[1]
 
 rocketWeight = 21.537
-propellanWeight = 3.969
+propellantWeight = 3.969
 
 g = 9.807
 
@@ -17,7 +15,7 @@ hMax = 3063
 engineThrust = []
 times = []
 
-burntMassPerTimePart = propellanWeight / (3.46) / 1000 # 0.001 saniyedeki ortalama kütle yakımı
+burntMassPerTimePart = propellantWeight / (3.46) / 1000 # 0.001 saniyedeki ortalama kütle yakımı
 
 def readThrustValues(filePath):
     with open(filePath, 'r') as data:
@@ -43,10 +41,11 @@ def averageThrust():
     return r/len(engineThrust)
 
 def runPhysics():
+    payloadWeight = 4
     thrust = 0.0
     tBefore = 0.0
     velocity = 0.6
-    altitude = 0.0
+    altitude = 0.0 # location of the barometric sensor
     pressure = 0
     density = 0
     angle = 85
@@ -56,70 +55,113 @@ def runPhysics():
     temperature = 15
     cd = 0.42
     currentMass = 0.0
+    terminalVelocity = 0.0
+    landingAltitude = 0.0
+    apogee = 0.0
+    apogeeTime = 0.0
+    status = "normal"
 
-    for t in numpy.arange(0.0, 100, 0.001):
+    for t in numpy.arange(0.0, 10000, 0.001): #actually it's going to be a numerical integration
         t = round(t.item(), 3)
 
-        if t <= 3.461:
-            if t in times:
-                thrust = engineThrust[times.index(t)]
+        if not status == "landing":
+
+            if t <= 3.461:
+                if t in times:
+                    thrust = engineThrust[times.index(t)]
+            else:
+                thrust = 0
+
+            if not thrust == 0:
+                # print("BURNT MASS" + str(burntMassPerTimePart*t))
+                currentMass = rocketWeight + (propellantWeight - burntMassPerTimePart*t)
+            else:
+                currentMass = rocketWeight
+
+            if altitude % 200 == 0:
+                temperature -= 1
+
+            #hpa -> pa
+            density = 100*pressure / ((temperature + 273.15)*(287.05))
+
+            base = (1-((0.0065*altitude)/(temperature + 273.15 + 0.0065*altitude)))
+
+            pressure = 1013.25*math.pow(base, 5.257)
+
+            airResistance = cd*((velocity*velocity)*density*noiseArea)/2
+
+            acceleration = ((thrust - airResistance - g*currentMass) / currentMass)*math.sin(math.pi*angle/180)
+
+            deltaT = t - tBefore
+
+            velocity += (acceleration * deltaT)
+
+            altitude += velocity * deltaT
+
+            # this formula has been taken from https://keisan.casio.com/exec/system/1224579725
+
+            if velocity >= 0 and velocity <= 0.005:
+                print("APOGEE")
+                print("Time: " + str(t))
+                print("Thrust: " + str(thrust))
+                print("Pressure: " + str(pressure))
+                print("Temperature: " + str(temperature))
+                print("Velocity: " + str(velocity))
+                print("Altitude: " + str(altitude))
+                print("Acceleration: " + str(acceleration) + "\n")
+                apogee = altitude
+                velocity = 0
+                apogeeTime = t
+                altitude = 1
+                cd = 0.5
+                noiseArea = (1.2)*(1.2)*math.pi
+                currentMass = rocketWeight - payloadWeight
+                airResistance = 0
+                terminalVelocity = math.sqrt((8*currentMass*g)/(density*cd*noiseArea))
+                status = "landing"
+                print("Terminal velocity:" + str(terminalVelocity) + "\n")
         else:
-            thrust = 0
+            if altitude % 200 == 0:
+                temperature += 1
 
-        if not thrust == 0:
-            # print("BURNT MASS" + str(burntMassPerTimePart*t))
-            currentMass = rocketWeight + (propellanWeight - burntMassPerTimePart*t)
-        else:
-            currentMass = rocketWeight
+            density = 100*pressure / ((temperature + 273.15)*(287.05))
 
-        if altitude % 200 == 0:
-            temperature -= 1
+            base = (1-((0.0065*altitude)/(temperature + 273.15 + 0.0065*altitude)))
 
-        acceleration = ((thrust - airResistance - g*currentMass) / currentMass)*math.sin(math.pi*angle/180)
+            pressure = 1013.25*math.pow(base, 5.257)
 
-        deltaT = t - tBefore
+            airResistance = cd*((velocity*velocity)*density*noiseArea)/2
 
-        velocity += (acceleration * deltaT)
+            acceleration = ((g*currentMass - airResistance) / currentMass)*math.sin(math.pi*angle/180)
 
-        #hpa -> pa
-        density = 100*pressure / ((temperature + 273.15)*(287.05))
+            deltaT = t - tBefore
 
-        airResistance = cd*((velocity*velocity)*density*noiseArea)/2
+            velocity += (acceleration * deltaT)
 
-        altitude += velocity * deltaT
+            if velocity >= terminalVelocity:
+                velocity = terminalVelocity
 
-        base = (1-((0.0065*altitude)/(temperature + 273.15 + 0.0065*altitude)))
+            altitude += velocity * deltaT
 
-        print("Base:" + str(base))
-        print("Altitude: " + str(altitude))
-        
-        pressure = 1013.25*math.pow(base, 5.257)
-        # this formula has been taken from https://keisan.casio.com/exec/system/1224579725
+            landingAltitude = apogee - altitude
 
-        if velocity >= 0 and velocity <= 0.005:
-            print("APOGEE")
-            print("Time: " + str(t))
-            print("Thrust: " + str(thrust))
-            print("Pressure: " + str(pressure))
-            print("Temperature: " + str(temperature))
-            print("Velocity: " + str(velocity))
-            print("Altitude: " + str(altitude))
-            print("Acceleration: " + str(acceleration))
-            break
-
-        #print("Time: " + str(t))
-        #print("Thrust: " + str(thrust))
-        #print("Pressure: " + str(pressure))
-        #print("Temperature: " + str(temperature))
-        #print("Velocity: " + str(velocity))
-        #print("Altitude: " + str(altitude))
-        #print("Acceleration: " + str(acceleration))
-        #print("\n")
+            if landingAltitude >= 0 and landingAltitude <= 1:
+                print("LANDED")
+                print("Time: " + str(t))
+                print("Thrust: " + str(thrust))
+                print("Pressure: " + str(pressure))
+                print("Temperature: " + str(temperature))
+                print("Velocity: " + str(velocity))
+                print("Altitude: " + str(landingAltitude))
+                print("Acceleration: " + str(acceleration) + "\n")
+                status = "landed"
+                break
 
         tBefore = t
 
-    print(velocity)
-    print(altitude)
+    # print(velocity)
+    # print(altitude)
+    # print(landingAltitude)
 
     return None
 
