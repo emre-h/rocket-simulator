@@ -7,7 +7,8 @@ thrustFilePath = sys.argv[1]
 
 rocketWeight = 21.537
 propellantWeight = 3.969
-
+payloadWeight = 4.5
+delimiter = '________________________'
 g = 9.807
 
 hMax = 3063
@@ -32,6 +33,7 @@ def readThrustValues(filePath):
 readThrustValues(thrustFilePath)
 
 stage = 1
+density = 0
 cd = 0.421
 area = math.pi*((0.06)*(0.06))
 
@@ -43,15 +45,12 @@ def averageThrust():
     return r/len(engineThrust)
 
 def runPhysics():
-    global dt, cd, tBefore, oldAltitude, area, stage
-
-    payloadWeight = 4.5
+    global dt, cd, tBefore, oldAltitude, area, stage, density
     thrust = 0.0
     tBefore = 0.0
     velocity = 0.6
     altitude = 0.0 # location of the barometric sensor
     pressure = 0
-    density = 0
     angle = 85
     acceleration = 0.0
     airResistance = 0.0
@@ -115,15 +114,13 @@ def runPhysics():
                 print("Velocity: " + str(velocity))
                 print("Altitude: " + str(altitude))
                 print("Acceleration: " + str(acceleration) + "\n")
+                print(delimiter + "\n")
                 apogee = altitude
                 velocity = 0
                 apogeeTime = t
                 altitude = 1
-                currentMass = rocketWeight - payloadWeight
                 airResistance = 0
                 status = "landing"
-                terminalVelocity = math.sqrt((8*currentMass*g)/(density*cd*area))
-                print("Terminal velocity: " + str(terminalVelocity) + "\n")
         else:
             if landingAltitude % 200 == 0:
                 temperature += 1
@@ -159,6 +156,7 @@ def runPhysics():
                 print("Velocity: " + str(velocity))
                 print("Altitude: " + str(landingAltitude))
                 print("Acceleration: " + str(acceleration) + "\n")
+                print(delimiter + "\n")
                 stage = 4
                 status = "landed"
                 break
@@ -172,24 +170,52 @@ def runPhysics():
     # print(landingAltitude)
     return None
 
-primaryRecvoeryMode = False
-secondaryRecvoeryMode = False
+primaryRecoveryMode = False
+secondaryRecoveryMode = False
 
 def firstRecovery():
-    global cd, status, stage
+    global cd, status, stage, density, area, currentMass
+
+    print("First recovery mode\n")
     # parachute
+
     area = (1.2)*(1.2)*math.pi
     cd = 0.5
+    currentMass = rocketWeight - payloadWeight
+    terminalVelocity = math.sqrt((8*currentMass*g)/(density*cd*area))
+
+    print("First terminal velocity: " + str(terminalVelocity) + "\n")
+
     stage = 2
     status = "recovery"
-    print("Recovery mode\n")
+    
+    print(delimiter + "\n")
+    return 1
+
+def secondRecovery():
+    global cd, status, stage, density, area, currentMass
+    print("Second recovery mode\n")
+    # parachute
+    currentMass = rocketWeight - payloadWeight
+    area = (2.5)*(2.5)*math.pi
+    cd = 0.5
+
+    terminalVelocity = math.sqrt((8*currentMass*g)/(density*cd*area))
+
+    print("Second terminal velocity: " + str(terminalVelocity) + "\n")
+    print(delimiter + "\n")
+
+    stage = 3
+    status = "recovery"
     return 1
 
 oldAltitude = 0
 dt = 0.001
 
+recCheck2 = False
+
 def primaryAvionicSystem(t,pressure, temperature, accelerationY):
-    global dt, cd, oldAltitude,primaryRecvoeryMode ,stage
+    global dt, cd, oldAltitude, primaryRecoveryMode, stage, recCheck2
 
     #FINDING VELOCITY FROM ALTITUDE
 
@@ -197,16 +223,31 @@ def primaryAvionicSystem(t,pressure, temperature, accelerationY):
 
     velocity = (altitude - oldAltitude) / dt
 
-    if not primaryRecvoeryMode and velocity >= -2 and velocity <= 0 and altitude < 3060 and altitude > 3000:
-        print("PRIMARY AVIONIC - RECOVERY MODE SIGNAL RECEIVED")
+    if not primaryRecoveryMode and velocity >= -2 and velocity <= 0 and altitude < 3060 and altitude > 3000:
+        print("PRIMARY AVIONIC - FIRST RECOVERY MODE - SIGNAL RECEIVED")
         print("Time: " + str(t))
         print("Pressure: " + str(pressure))
         print("Temperature: " + str(temperature))
         print("Velocity: " + str(velocity))
         print("Altitude: " + str(altitude))
         print("Acceleration: " + str(accelerationY) + "\n")
-        primaryRecvoeryMode = True
+
+        primaryRecoveryMode = True
         firstRecovery()
+
+        oldAltitude = altitude
+        return 1
+    elif primaryRecoveryMode and not recCheck2 and velocityVector < 0 and altitudeVector > 450 and altitudeVector < 600:
+        print("SECONDARY AVIONIC - SECOND RECOVERY MODE SIGNAL RECEIVED")
+        print("Time: " + str(t))
+        print("Calculated altitude: " + str(altitudeVector))
+        print("Velocity: " + str(velocityVector))
+        print("Acceleration: " + str(accelerationY) + "\n")
+
+        recCheck2 = True
+        secondRecovery()
+
+        oldAltitude = altitude
         return 1
 
     oldAltitude = altitude
@@ -216,8 +257,10 @@ def primaryAvionicSystem(t,pressure, temperature, accelerationY):
 velocityVector = 0
 altitudeVector = 0
 
+recCheck = False
+
 def secondaryAvionicSystem(t, accelerationY):
-    global velocityVector, altitudeVector, secondaryRecvoeryMode, dt
+    global velocityVector, altitudeVector, secondaryRecoveryMode, dt, recCheck
 
     #FINDING VELOCITY AND ALTITUDE FROM ACCELERATION
 
@@ -225,15 +268,26 @@ def secondaryAvionicSystem(t, accelerationY):
 
     altitudeVector += velocityVector*dt
 
-    if not secondaryRecvoeryMode and velocityVector >= -3 and velocityVector <= -1 and altitudeVector < 3060 and altitudeVector >= 3000:
-        print("SECONDARY AVIONIC - RECOVERY MODE SIGNAL RECEIVED")
+    if not secondaryRecoveryMode and velocityVector >= -3 and velocityVector <= -1 and altitudeVector < 3060 and altitudeVector >= 3000:
+        print("SECONDARY AVIONIC - FIRST RECOVERY MODE SIGNAL RECEIVED")
         print("Time: " + str(t))
         print("Calculated altitude: " + str(altitudeVector))
         print("Velocity: " + str(velocityVector))
         print("Acceleration: " + str(accelerationY) + "\n")
-        secondaryRecvoeryMode = True
+
+        secondaryRecoveryMode = True
         firstRecovery()
         return 1
+    elif secondaryRecoveryMode and not recCheck and velocityVector < 0 and altitudeVector > 450 and altitudeVector < 600:
+        print("SECONDARY AVIONIC - SECOND RECOVERY MODE SIGNAL RECEIVED")
+        print("Time: " + str(t))
+        print("Calculated altitude: " + str(altitudeVector))
+        print("Velocity: " + str(velocityVector))
+        print("Acceleration: " + str(accelerationY) + "\n")
+
+        recCheck = True
+        secondRecovery()
+        
 
     return 0
 
