@@ -79,7 +79,7 @@ def runPhysics():
             else:
                 currentMass = rocketWeight
 
-            if altitude % 200 == 0:
+            if round(altitude,2) % 200 == 0:
                 temperature -= 1
 
             #hpa -> pa
@@ -122,7 +122,7 @@ def runPhysics():
                 airResistance = 0
                 status = "landing"
         else:
-            if landingAltitude % 200 == 0:
+            if round(landingAltitude,2)  % 200 == 0:
                 temperature += 1
 
             density = 100*pressure / ((temperature + 273.15)*(287.05))
